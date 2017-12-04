@@ -4,7 +4,7 @@ import Http
 import Models exposing (..)
 import Routing
 import Messages exposing (Msg)
-import Images.Models exposing (Image, Person)
+import Images.Models exposing (Image, Person, PersonId)
 import Images.CardView exposing (cardView)
 import Images.ImageView exposing (imageView)
 import Html exposing (Html, div, text, program)
@@ -42,8 +42,13 @@ page model =
                 (\( allImages, allPeople ) ->
                     case (getImage allImages id) of
                         Just image ->
-                            (getPeople allPeople image)
-                                |> imageView image
+                            let
+                                people =
+                                    (getPeople allPeople image)
+                            in
+                                imageView
+                                    ( image, allImages )
+                                    ( Maybe.Nothing, people )
 
                         Nothing ->
                             imageNotFoundView
@@ -53,21 +58,59 @@ page model =
         Routing.PersonRoute id ->
             remoteDataView
                 (\( allImages, allPeople ) ->
-                    case (getPerson allPeople id) of
-                        Just person ->
-                            allImages
-                                |> getImagesOfPerson person
-                                |> galleryView
+                    let
+                        maybePerson =
+                            (getPerson allPeople id)
+                    in
+                        case maybePerson of
+                            Just person ->
+                                let
+                                    galleryImages =
+                                        (getImagesOfPerson person allImages)
+                                in
+                                    galleryView
+                                        galleryImages
+                                        maybePerson
 
-                        Nothing ->
-                            personNotFoundView
+                            Nothing ->
+                                personNotFoundView
+                )
+                model
+
+        Routing.PersonImageRoute personId imageId ->
+            remoteDataView
+                (\( allImages, allPeople ) ->
+                    let
+                        maybePerson =
+                            (getPerson allPeople personId)
+                    in
+                        case maybePerson of
+                            Just person ->
+                                case (getImage allImages imageId) of
+                                    Just image ->
+                                        let
+                                            images =
+                                                (getImagesOfPerson person allImages)
+
+                                            people =
+                                                (getPeople allPeople image)
+                                        in
+                                            imageView
+                                                ( image, images )
+                                                ( maybePerson, people )
+
+                                    Nothing ->
+                                        personImageNotFoundView
+
+                            Nothing ->
+                                personNotFoundView
                 )
                 model
 
         Routing.HomeRoute ->
             remoteDataView
                 (\( allImages, allPeople ) ->
-                    galleryView allImages
+                    galleryView allImages Maybe.Nothing
                 )
                 model
 
@@ -95,12 +138,12 @@ errorView err =
         [ text ("There was an error... " ++ (toString err)) ]
 
 
-galleryView : List Image -> Html Msg
-galleryView images =
+galleryView : List Image -> Maybe Person -> Html Msg
+galleryView images maybePerson =
     div
         [ class "gallery" ]
         (images
-            |> List.map (cardView)
+            |> List.map (\image -> (cardView image maybePerson))
         )
 
 
@@ -112,6 +155,11 @@ imageNotFoundView =
 personNotFoundView : Html Msg
 personNotFoundView =
     (notFoundView "Person not found.")
+
+
+personImageNotFoundView : Html Msg
+personImageNotFoundView =
+    (notFoundView "Image of person not found.")
 
 
 notFoundView : String -> Html Msg
